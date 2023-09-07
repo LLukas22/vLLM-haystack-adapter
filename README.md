@@ -1,5 +1,6 @@
 # vLLM-haystack-adapter
-
+[![PyPI - Version](https://img.shields.io/pypi/v/vllm-haystack.svg)](https://pypi.org/project/vllm-haystack)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/vllm-haystack.svg)](https://pypi.org/project/vllm-haystack)
 
 Simply connect your haystack pipeline to a selfhosted [vLLM-API](https://github.com/vllm-project/vllm) server. 
 
@@ -35,4 +36,4 @@ For more configuration examples, take a look at the unit-tests.
 ## Hosting a vLLM Server
 
 To create an *OpenAI-Compatible Server* via vLLM you can follow the steps in the 
-Quickstart section of their [documenetation](https://vllm.readthedocs.io/en/latest/getting_started/quickstart.html#openai-compatible-server).
+Quickstart section of their [documentation](https://vllm.readthedocs.io/en/latest/getting_started/quickstart.html#openai-compatible-server).
