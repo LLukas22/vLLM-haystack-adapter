@@ -5,7 +5,6 @@ Simply connect your haystack pipeline to a selfhosted [vLLM-API](https://github.
 
 <p align="center">
     <img alt="vLLM" src="https://raw.githubusercontent.com/vllm-project/vllm/main/docs/source/assets/logos/vllm-logo-text-light.png" width="45%" style="vertical-align: middle;">
-    <span style="font-size: 70px; vertical-align: middle;"> + </span>
     <a href="https://www.deepset.ai/haystack/">
         <img src="https://raw.githubusercontent.com/deepset-ai/haystack/main/docs/img/haystack_logo_colored.png" alt="Haystack" width="45%" style="vertical-align: middle;">
     </a>
