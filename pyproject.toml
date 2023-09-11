@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "vllm-haystack"
 dynamic = ["version"]
-description = 'A simple adapter to use a hosted vLLM-API in your Haystack pipelines. '
+description = 'A simple adapter to use vLLM in your Haystack pipelines. '
 readme = "README.md"
 requires-python = ">=3.7"
 license = "MIT"
-keywords = []
+keywords = ["LLM", "Haystack", "NLP", "AI"]
 authors = [
   { name = "Lukas Kreussel", email = "65088241+LLukas22@users.noreply.github.com" },
 ]
@@ -32,9 +32,9 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/LLukas22/vllm-haystack#readme"
-Issues = "https://github.com/LLukas22/vllm-haystack/issues"
-Source = "https://github.com/LLukas22/vllm-haystack"
+Documentation = "https://github.com/LLukas22/vLLM-haystack-adapter#readme"
+Issues = "https://github.com/LLukas22/vLLM-haystack-adapter/issues"
+Source = "https://github.com/LLukas22/vLLM-haystack-adapter"
 
 [tool.hatch.version]
 path = "src/vllm_haystack/__about__.py"

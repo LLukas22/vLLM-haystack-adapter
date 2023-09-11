@@ -15,6 +15,9 @@ from haystack.utils.openai_utils import (
     _check_openai_finish_reason,
 )
 
+from haystack.lazy_imports import LazyImport
+with LazyImport("Is `vLLM` installed?") as vllm_importer:
+    from vllm import LLM, SamplingParams
 
 logger = logging.getLogger(__name__)
 
@@ -242,3 +245,124 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
         except Exception as e:
             raise ValueError(f"Could not get models from `{url}/models`!") from e
         
+
+class vLLMLocalInvocationLayer(PromptModelInvocationLayer):
+    def __init__(
+        self, 
+        model_name_or_path: str, 
+        max_length: Optional[int] = 100, 
+        maximum_context_length: Optional[int] = None, 
+        tokenizer: Optional[str] = None,
+        hf_token:Optional[str] = None, 
+        dtype: str = "auto",
+        tensor_parallel_size:int = 1,
+        trust_remote_code: bool = False,
+        gpu_memory_utilization: float = 0.95,
+        vLLM_kwargs: Dict[str, Any] = {},
+        **kwargs
+    ):
+        super().__init__(model_name_or_path, **kwargs)
+        vllm_importer.check()
+        
+        vLLM_kwargs["gpu_memory_utilization"] = gpu_memory_utilization
+        self.max_tokens_limit = maximum_context_length
+        tokenizer_name  = tokenizer or model_name_or_path
+        
+        self.max_length = max_length or 16
+
+        # Due to reflective construction of all invocation layers we might receive some
+        # unknown kwargs, so we need to take only the relevant.
+        # For more details refer to OpenAI documentation
+        self.model_input_kwargs = {
+            key: kwargs[key]
+            for key in [
+                "suffix",
+                "max_tokens",
+                "temperature",
+                "top_p",
+                "n",
+                "logprobs",
+                "echo",
+                "stop",
+                "presence_penalty",
+                "frequency_penalty",
+                "best_of",
+                "logit_bias",
+                "stream",
+                "stream_handler",
+                "moderate_content",
+            ]
+            if key in kwargs
+        }
+        
+        self.tokenizer = Tokenizer.from_pretrained(tokenizer_name,auth_token=hf_token)
+        self.model = LLM(model=model_name_or_path, tokenizer=tokenizer_name, dtype=dtype, trust_remote_code=trust_remote_code, tensor_parallel_size=tensor_parallel_size,**vLLM_kwargs)
+        
+        
+        
+    def invoke(self, *args, **kwargs):
+        """
+        Invokes a prompt on the model. Based on the model, it takes in a prompt (or either a prompt or a list of messages)
+        and returns a list of responses using a REST invocation.
+
+        :return: The responses are being returned.
+
+        Note: Only kwargs relevant to OpenAI are passed to OpenAI rest API. Others kwargs are ignored.
+        For more details, see OpenAI [documentation](https://platform.openai.com/docs/api-reference/completions/create).
+        """
+        prompt = kwargs.get("prompt")
+        # either stream is True (will use default handler) or stream_handler is provided
+        kwargs_with_defaults = self.model_input_kwargs
+        if kwargs:
+            # we use keyword stop_words but OpenAI uses stop
+            if "stop_words" in kwargs:
+                kwargs["stop"] = kwargs.pop("stop_words")
+            if "top_k" in kwargs:
+                top_k = kwargs.pop("top_k")
+                kwargs["n"] = top_k
+                kwargs["best_of"] = top_k
+            kwargs_with_defaults.update(kwargs)
+            
+        stream = (
+            kwargs_with_defaults.get("stream", False) or kwargs_with_defaults.get("stream_handler", None) is not None
+        )
+        
+        sampling_params = SamplingParams(
+            max_tokens = kwargs_with_defaults.get("max_tokens", self.max_length),
+            temperature= kwargs_with_defaults.get("temperature", 0.7),
+            top_p= kwargs_with_defaults.get("top_p", 1),
+            n= kwargs_with_defaults.get("n", 1),
+            stop= kwargs_with_defaults.get("stop", None),
+            presence_penalty= kwargs_with_defaults.get("presence_penalty", 0),
+            frequency_penalty= kwargs_with_defaults.get("frequency_penalty", 0),
+            )
+        
+        result = self.model.generate(prompt, sampling_params)[0]
+        
+        return result.outputs[0].text
+    
+    
+    def _ensure_token_limit(self, prompt: Union[str, List[Dict[str, str]]]) -> Union[str, List[Dict[str, str]]]:
+        """Ensure that the length of the prompt and answer is within the max tokens limit of the model.
+        If needed, truncate the prompt text so that it fits within the limit.
+
+        :param prompt: Prompt text to be sent to the generative model.
+        """
+        encoded_prompt = list(self.tokenizer.encode(cast(str, prompt)).ids)
+        n_prompt_tokens = len(encoded_prompt)
+        n_answer_tokens = self.max_length
+        if (n_prompt_tokens + n_answer_tokens) <= self.max_tokens_limit:
+            return prompt
+
+        logger.warning(
+            "The prompt has been truncated from %s tokens to %s tokens so that the prompt length and "
+            "answer length (%s tokens) fit within the max token limit (%s tokens). "
+            "Reduce the length of the prompt to prevent it from being cut off.",
+            n_prompt_tokens,
+            self.max_tokens_limit - n_answer_tokens,
+            n_answer_tokens,
+            self.max_tokens_limit,
+        )
+
+        decoded_string = self.tokenizer.decode(encoded_prompt[: self.max_tokens_limit - n_answer_tokens])
+        return decoded_string
