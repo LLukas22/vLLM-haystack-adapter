@@ -104,8 +104,8 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
         if isinstance(tokenizer, str) or tokenizer is None:
             self.tokenizer = Tokenizer.from_pretrained(tokenizer or model_name_or_path,auth_token=hf_token)
         else:
-            if not hasattr(tokenizer, "encode"):
-                raise AttributeError(f"tokenizer `{type(tokenizer)}` does not provide an `encode` method")
+            if not hasattr(tokenizer, "encode") or not hasattr(tokenizer, "decode"):
+                raise AttributeError(f"tokenizer `{type(tokenizer)}` does not seem to be a valid tokenizer and is missing `encode`, `decode`, or both")
             self.tokenizer = tokenizer
 
         #Infer the context length of the model
@@ -215,11 +215,14 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
         :param prompt: Prompt text to be sent to the generative model.
         """
         encoding = self.tokenizer.encode(cast(str, prompt))
-        if not isinstance(encoding, list):
+        if hasattr(encoding, "ids"):
             encoded_prompt = list(encoding.ids)
-        else:
+        elif isinstance(encoding, list):
             # the provided tokenizer natively returns the ids from the encode call, such as a Transformers tokenizer
             encoded_prompt = list(encoding)
+        else:
+            raise ValueError(f"tokenizer {type(self.tokenizer)} does not implement a known return type for encoding")
+        
         n_prompt_tokens = len(encoded_prompt)
         n_answer_tokens = self.max_length
         if (n_prompt_tokens + n_answer_tokens) <= self.max_tokens_limit:
