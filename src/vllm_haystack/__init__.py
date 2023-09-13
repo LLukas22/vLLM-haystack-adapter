@@ -36,15 +36,15 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
         api_base: str,
         max_length: Optional[int] = 100,
         model_name_or_path: Optional[str] = None,
-        tokenizer: Optional[str] = None,
-        hf_token:Optional[str] = None,
+        tokenizer: Optional[Union[str, object]] = None,
+        hf_token: Optional[str] = None,
         maximum_context_length: Optional[int] = None,
         **kwargs,
     ):
         """
         Creates an instance of vLLMInvocationLayer for an hosted vLLM server.
 
-        :param api_base: The base url, used to cummunicate with your vLLM server. E.g. `https://[MY Server]/v1`.
+        :param api_base: The base url, used to communicate with your vLLM server. E.g. `https://[MY Server]/v1`.
         :param model_name_or_path: The name or path of the underlying model.
         :param max_length: The maximum number of tokens the output text can have.
         :param tokenizer: Optional tokenizer to load from the hub.
@@ -101,7 +101,12 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
             if key in kwargs
         }
 
-        self.tokenizer = Tokenizer.from_pretrained(tokenizer or model_name_or_path,auth_token=hf_token)
+        if isinstance(tokenizer, str) or tokenizer is None:
+            self.tokenizer = Tokenizer.from_pretrained(tokenizer or model_name_or_path,auth_token=hf_token)
+        else:
+            if not hasattr(tokenizer, "encode") or not hasattr(tokenizer, "decode"):
+                raise AttributeError(f"tokenizer `{type(tokenizer)}` does not seem to be a valid tokenizer and is missing `encode`, `decode`, or both")
+            self.tokenizer = tokenizer
 
         #Infer the context length of the model
         if maximum_context_length:
@@ -209,7 +214,15 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
 
         :param prompt: Prompt text to be sent to the generative model.
         """
-        encoded_prompt = list(self.tokenizer.encode(cast(str, prompt)).ids)
+        encoding = self.tokenizer.encode(cast(str, prompt))
+        if hasattr(encoding, "ids"):
+            encoded_prompt = list(encoding.ids)
+        elif isinstance(encoding, list):
+            # the provided tokenizer natively returns the ids from the encode call, such as a Transformers tokenizer
+            encoded_prompt = list(encoding)
+        else:
+            raise ValueError(f"tokenizer {type(self.tokenizer)} does not implement a known return type for encoding")
+        
         n_prompt_tokens = len(encoded_prompt)
         n_answer_tokens = self.max_length
         if (n_prompt_tokens + n_answer_tokens) <= self.max_tokens_limit:
