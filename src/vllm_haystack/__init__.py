@@ -34,7 +34,7 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
     def __init__(
         self,
         api_base: str,
-        api_key: str,
+        api_key: Optional[str] = None,
         max_length: Optional[int] = 100,
         model_name_or_path: Optional[str] = None,
         tokenizer: Optional[Union[str, object]] = None,
