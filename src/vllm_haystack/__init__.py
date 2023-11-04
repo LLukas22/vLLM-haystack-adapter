@@ -34,6 +34,7 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
     def __init__(
         self,
         api_base: str,
+        api_key: Optional[str] = None,
         max_length: Optional[int] = 100,
         model_name_or_path: Optional[str] = None,
         tokenizer: Optional[Union[str, object]] = None,
@@ -68,7 +69,8 @@ class vLLMInvocationLayer(PromptModelInvocationLayer):
 
         super().__init__(model_name_or_path)
         
-        self.api_key = "EMPTY" # this is a dummy value
+        # This accepts an API key or sets it to a dummy value
+        self.api_key = api_key or "EMPTY"
         self.api_base = api_base
 
         # 16 is the default length for answers from OpenAI shown in the docs
