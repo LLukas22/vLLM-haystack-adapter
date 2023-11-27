@@ -354,7 +354,7 @@ class vLLMLocalInvocationLayer(PromptModelInvocationLayer):
         
         result = self.model.generate(prompt, sampling_params)[0]
         
-        return result.outputs[0].text
+        return [r.outputs[0].text for r in result]
     
     
     def _ensure_token_limit(self, prompt: Union[str, List[Dict[str, str]]]) -> Union[str, List[Dict[str, str]]]:
