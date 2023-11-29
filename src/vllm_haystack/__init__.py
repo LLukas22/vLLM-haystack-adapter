@@ -352,9 +352,9 @@ class vLLMLocalInvocationLayer(PromptModelInvocationLayer):
             frequency_penalty= kwargs_with_defaults.get("frequency_penalty", 0),
             )
         
-        result = self.model.generate(prompt, sampling_params)[0]
+        result = self.model.generate(prompt, sampling_params)
         
-        return result.outputs[0].text
+        return [r.outputs[0].text for r in result]
     
     
     def _ensure_token_limit(self, prompt: Union[str, List[Dict[str, str]]]) -> Union[str, List[Dict[str, str]]]:
