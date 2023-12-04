@@ -7,6 +7,7 @@ from typing import Dict, List, Union, Type, Optional, Any, cast
 import logging 
 import json 
 import requests
+import inspect
 
 from tokenizers import Tokenizer
 from haystack.errors import OpenAIError
@@ -287,28 +288,9 @@ class vLLMLocalInvocationLayer(PromptModelInvocationLayer):
 
         # Due to reflective construction of all invocation layers we might receive some
         # unknown kwargs, so we need to take only the relevant.
-        # For more details refer to OpenAI documentation
-        self.model_input_kwargs = {
-            key: kwargs[key]
-            for key in [
-                "suffix",
-                "max_tokens",
-                "temperature",
-                "top_p",
-                "n",
-                "logprobs",
-                "echo",
-                "stop",
-                "presence_penalty",
-                "frequency_penalty",
-                "best_of",
-                "logit_bias",
-                "stream",
-                "stream_handler",
-                "moderate_content",
-            ]
-            if key in kwargs
-        }
+        self._allowed_params = [p.name for p in inspect.signature(SamplingParams).parameters.values()]
+        self.model_input_kwargs = {k: kwargs[k] for k in self._allowed_params if k in kwargs}
+        self._stream = (kwargs.get("stream", False) or kwargs.get("stream_handler", None) is not None)
         
         self.tokenizer = Tokenizer.from_pretrained(tokenizer_name,auth_token=hf_token)
         self.model = LLM(model=model_name_or_path, tokenizer=tokenizer_name, dtype=dtype, trust_remote_code=trust_remote_code, tensor_parallel_size=tensor_parallel_size,**vLLM_kwargs)
@@ -322,35 +304,26 @@ class vLLMLocalInvocationLayer(PromptModelInvocationLayer):
 
         :return: The responses are being returned.
 
-        Note: Only kwargs relevant to OpenAI are passed to OpenAI rest API. Others kwargs are ignored.
-        For more details, see OpenAI [documentation](https://platform.openai.com/docs/api-reference/completions/create).
+        Note: Only kwargs relevant to vLLM are passed to local vLLM model. Others kwargs are ignored.
         """
         prompt = kwargs.get("prompt")
         # either stream is True (will use default handler) or stream_handler is provided
-        kwargs_with_defaults = self.model_input_kwargs
+        kwargs_with_defaults = self.model_input_kwargs.copy()
+
         if kwargs:
             # we use keyword stop_words but OpenAI uses stop
             if "stop_words" in kwargs:
-                kwargs["stop"] = kwargs.pop("stop_words")
+                kwargs_with_defaults["stop"] = kwargs.pop("stop_words")
             if "top_k" in kwargs:
                 top_k = kwargs.pop("top_k")
-                kwargs["n"] = top_k
-                kwargs["best_of"] = top_k
-            kwargs_with_defaults.update(kwargs)
+                kwargs_with_defaults["n"] = top_k
+                kwargs_with_defaults["best_of"] = top_k
+            for k, v in kwargs.items():
+                if k in self._allowed_params:
+                    kwargs_with_defaults[k] = v 
+        _stream = (kwargs.get("stream", False) or kwargs.get("stream_handler", None) is not None) or self._stream
             
-        stream = (
-            kwargs_with_defaults.get("stream", False) or kwargs_with_defaults.get("stream_handler", None) is not None
-        )
-        
-        sampling_params = SamplingParams(
-            max_tokens = kwargs_with_defaults.get("max_tokens", self.max_length),
-            temperature= kwargs_with_defaults.get("temperature", 0.7),
-            top_p= kwargs_with_defaults.get("top_p", 1),
-            n= kwargs_with_defaults.get("n", 1),
-            stop= kwargs_with_defaults.get("stop", None),
-            presence_penalty= kwargs_with_defaults.get("presence_penalty", 0),
-            frequency_penalty= kwargs_with_defaults.get("frequency_penalty", 0),
-            )
+        sampling_params = SamplingParams(**kwargs_with_defaults)
         
         result = self.model.generate(prompt, sampling_params)
         
